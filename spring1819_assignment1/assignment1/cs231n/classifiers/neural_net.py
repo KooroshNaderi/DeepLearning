@@ -127,13 +127,17 @@ class TwoLayerNet(object):
         sum_exp_s = np.sum(exp_s, axis=1).reshape(-1,1)
         
         # d_s gets the derivative of loss with respect to out_puts changes
-        d_s = exp_s / sum_exp_s # N * C
-        d_s[np.arange(0,num_data), y] -= 1
+        dLoss_s = exp_s / sum_exp_s # N * C
+        dLoss_s[np.arange(0,num_data), y] -= 1
         
-        db2 = np.sum(d_s, axis=0)
-        dw2 = f1.T.dot(d_s) # (N*H).T.dot(N*C) = H*C
-        db1 = np.sum(d_s.dot(W2.T) * (f0 > 0), axis=0)
-        dw1 = X.T.dot(d_s.dot(W2.T) * (f0 > 0))
+        db2 = np.sum(dLoss_s, axis=0)
+        dw2 = f1.T.dot(dLoss_s) # (N*H).T.dot(N*C) = H*C
+        
+        # backpropagate
+        dLoss_f0 = dLoss_s.dot(W2.T) * (f0 > 0)
+        
+        db1 = np.sum(dLoss_f0, axis=0)
+        dw1 = X.T.dot(dLoss_f0)
         
         grads['b2'] = db2 / num_data
         grads['W2'] = dw2 / num_data + 2 * reg * W2
