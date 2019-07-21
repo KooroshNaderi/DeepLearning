@@ -87,7 +87,7 @@ def softmax_loss_vectorized(W, X, y, reg):
     v = np.zeros((num_data, num_class)) # N * C
     v[np.arange(0,num_data), y] = -1 
     v += np.exp(score) / sum_exp_sj.reshape(-1,1)
-    dW = X.T.dot(v)
+    dW = X.T.dot(v) # D*N*N*C = D*C
     
     loss /= num_data
     dW /= num_data

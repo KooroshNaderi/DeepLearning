@@ -79,9 +79,10 @@ class TwoLayerNet(object):
         # shape (N, C).                                                             #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
+        f0 = X.dot(W1) + b1
+        f1 = np.maximum(0.0, f0)
+        scores = f1.dot(W2) + b2
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         # If the targets are not given then jump out, we're done
@@ -97,9 +98,14 @@ class TwoLayerNet(object):
         # classifier loss.                                                          #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
+        num_data = X.shape[0]
+        
+        scores_correct_class = scores[np.arange(0,num_data), y].reshape(-1,1)
+        sum_exp_scores = np.sum(np.exp(scores), axis=1).reshape(-1,1)
+        loss = np.sum(-scores_correct_class + np.log(sum_exp_scores)) / num_data
+        
+        loss += reg * (np.sum(W1 ** 2) + np.sum(W2 ** 2))
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         # Backward pass: compute gradients
@@ -110,9 +116,29 @@ class TwoLayerNet(object):
         # grads['W1'] should store the gradient on W1, and be a matrix of same size #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
+        
+        db2 = np.zeros(b2.shape)
+        dw2 = np.zeros(W2.shape)
+        db1 = np.zeros(b1.shape)
+        dw1 = np.zeros(W1.shape)
+        
+        # scores # N*C
+        exp_s = np.exp(scores)
+        sum_exp_s = np.sum(exp_s, axis=1).reshape(-1,1)
+        
+        # d_s gets the derivative of loss with respect to out_puts changes
+        d_s = exp_s / sum_exp_s # N * C
+        d_s[np.arange(0,num_data), y] -= 1
+        
+        db2 = np.sum(d_s, axis=0)
+        dw2 = f1.T.dot(d_s) # (N*H).T.dot(N*C) = H*C
+        db1 = np.sum(d_s.dot(W2.T) * (f0 > 0), axis=0)
+        dw1 = X.T.dot(d_s.dot(W2.T) * (f0 > 0))
+        
+        grads['b2'] = db2 / num_data
+        grads['W2'] = dw2 / num_data + 2 * reg * W2
+        grads['b1'] = db1 / num_data
+        grads['W1'] = dw1 / num_data + 2 * reg * W1
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         return loss, grads
@@ -156,7 +182,9 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            pass
+            random_idx = np.random.choice(num_train, batch_size)
+            X_batch = X[random_idx, :]
+            y_batch = y[random_idx]
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -172,7 +200,10 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            pass
+            self.params['W1'] -= learning_rate * grads['W1']
+            self.params['b1'] -= learning_rate * grads['b1']
+            self.params['W2'] -= learning_rate * grads['W2']
+            self.params['b2'] -= learning_rate * grads['b2']
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -217,9 +248,10 @@ class TwoLayerNet(object):
         # TODO: Implement this function; it should be VERY simple!                #
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
+        
+        scores = self.loss(X)
+        y_pred = np.argmax(scores, axis=1)
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         return y_pred
