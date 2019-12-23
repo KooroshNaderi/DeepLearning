@@ -3,6 +3,7 @@ import tensorflow as tf
 import graphical  # , game
 import numpy as np
 from Agent import Agent
+import os
 
 
 class MyTools:
@@ -11,6 +12,7 @@ class MyTools:
     N_Dir = 2
 
     move_division = 5
+    use_calculated_action = False
 
     def __init__(self):
         self._calculate_state_actions_stats()
@@ -97,10 +99,12 @@ class MyTools:
         return board_num
 
     @staticmethod
-    def get_20_non_zero(col_feature, row_feature):
+    def get_non_zero_moves(col_feature, row_feature):
         # True row switch
         # False col switch
-        N = 20
+        n = 20
+        if not MyTools.use_calculated_action:
+            n = 200
         out_list = []
         counter_valid_moves = 0
         for row in range(0, MyTools.N_Rows):
@@ -113,20 +117,20 @@ class MyTools:
                 elif row_feature[row, col]:
                     v = 3
                 if v > 0:
-                    if v == 1 and len(out_list) < N:
+                    if v == 1 and len(out_list) < n:
                         out_list.append((col, row, True))
                         counter_valid_moves += 1
-                    if v == 1 and len(out_list) < N:
+                    if v == 1 and len(out_list) < n:
                         out_list.append((col, row, False))
                         counter_valid_moves += 1
-                    if v == 2 and len(out_list) < N:
+                    if v == 2 and len(out_list) < n:
                         out_list.append((col, row, False))
                         counter_valid_moves += 1
-                    if v == 3 and len(out_list) < N:
+                    if v == 3 and len(out_list) < n:
                         out_list.append((col, row, True))
                         counter_valid_moves += 1
 
-        return out_list, counter_valid_moves
+        return out_list
 
     @staticmethod
     def get_game_state(board, moves_left):
@@ -176,9 +180,9 @@ class MyTools:
         # print(row_feature)
 
         # ##### put features in the state
-        state = np.zeros((2 * MyTools.N_Rows * MyTools.N_Cols + 20 * 3 + 1))
+        state = []  # np.zeros((2 * MyTools.N_Rows * MyTools.N_Cols + 20 * 3 + 1))
 
-        c_state_index = 0
+        # c_state_index = 0
         for row in range(0, MyTools.N_Rows):
             for col in range(0, MyTools.N_Cols):
                 v = 0
@@ -188,52 +192,44 @@ class MyTools:
                     v = 2
                 elif row_feature[row, col]:
                     v = 3
-                state[c_state_index] = 2.0 * (v / 3.0) - 1.0
-                c_state_index += 1
-                state[c_state_index] = 2.0 * ((board_num[row, col] + 1) / 5.0) - 1.0
-                c_state_index += 1
+                state.append(2.0 * (v / 3.0) - 1.0)  # [c_state_index]
+                state.append(2.0 * ((board_num[row, col] + 1) / 5.0) - 1.0)
 
         # state[c_state_index] = moves_left / 25.0
 
-        valid_moves, num_valid_moves = MyTools.get_20_non_zero(col_feature, row_feature)
-
-        for i in range(0, 20):
-            if i < num_valid_moves:
-                state[c_state_index] = 2.0 * (float(valid_moves[i][0] / float(MyTools.N_Cols))) - 1.0
-            else:
-                state[c_state_index] = 0
-            c_state_index += 1
-            if i < num_valid_moves:
-                state[c_state_index] = 2.0 * (float(valid_moves[i][1] / float(MyTools.N_Cols))) - 1.0
-            else:
-                state[c_state_index] = 0
-            c_state_index += 1
-            if i < num_valid_moves:
-                if valid_moves[i][1]:
-                    state[c_state_index] = 1
+        valid_moves = MyTools.get_non_zero_moves(col_feature, row_feature)
+        if MyTools.use_calculated_action:
+            num_valid_moves = len(valid_moves)
+            for i in range(0, 20):
+                if i < num_valid_moves:
+                    state.append(2.0 * (float(valid_moves[i][0] / float(MyTools.N_Cols))) - 1.0)
+                    state.append(2.0 * (float(valid_moves[i][1] / float(MyTools.N_Cols))) - 1.0)
+                    if valid_moves[i][1]:
+                        state.append(1.0)
+                    else:
+                        state.append(-1.0)
                 else:
-                    state[c_state_index] = -1
-            else:
-                state[c_state_index] = 0
-            c_state_index += 1
-        state[c_state_index] = 2.0 * (num_valid_moves / 20.0) - 1.0
+                    state.append(0.0)
+                    state.append(0.0)
+                    state.append(0.0)
+            state.append(2.0 * (num_valid_moves / 20.0) - 1.0)
 
-        return state, valid_moves, num_valid_moves
+        return np.array(state), valid_moves
 
     @staticmethod
-    def get_action_from(move, use_discrete_action=False, valid_moves=None, num_valid_moves=None):
-        if valid_moves is not None and num_valid_moves is not None:
+    def get_action_from(move, use_discrete_action=False, valid_moves=None):
+        if valid_moves is not None and MyTools.use_calculated_action:
             # valid_moves.index((2, 0, True))
             if move in valid_moves:
                 move_index = valid_moves.index(move)
 
-                _c = int(move_index / MyTools.move_division)
+                _c = int(float(move_index) / float(MyTools.move_division))
                 if _c >= 4:
                     _c = 3
                 out_action = np.zeros(3)
 
                 out_action[0] = _c % 2
-                out_action[1] = int(_c / 2)
+                out_action[1] = int(_c / 2.0)
                 out_action[2] = float((move_index % MyTools.move_division) / float(MyTools.move_division))
 
                 return 2.0 * out_action - 1.0
@@ -253,10 +249,10 @@ class MyTools:
 
             out_action = (action[2]) * (MyTools.N_Rows * MyTools.N_Cols) + (action[0] * MyTools.N_Rows + action[1])
         else:
-            action = np.array(move)
+            action = np.zeros(3)
 
-            action[0] = action[0] / float(MyTools.N_Cols - 1.0)
-            action[1] = action[1] / float(MyTools.N_Rows - 1.0)
+            action[0] = float(move[0]) / float(MyTools.N_Cols - 1.0)
+            action[1] = float(move[1]) / float(MyTools.N_Rows - 1.0)
             if move[2]:
                 action[2] = 1
             else:
@@ -266,8 +262,8 @@ class MyTools:
         return out_action
 
     @staticmethod
-    def get_move_from(action, use_discrete_action=False, valid_moves=None, num_valid_moves=None):
-        if valid_moves is not None and num_valid_moves is not None:
+    def get_move_from(action, use_discrete_action=False, valid_moves=None):
+        if valid_moves is not None and MyTools.use_calculated_action:
             a = action[0]
             if 0 <= a <= 1:
                 a = 1
@@ -286,7 +282,6 @@ class MyTools:
             if move_index < len(valid_moves):
                 return valid_moves[move_index]
 
-        action = np.array(action)
         use_discrete_action = use_discrete_action
         if use_discrete_action:
             row_col = action % (MyTools.N_Rows * MyTools.N_Cols)
@@ -295,9 +290,6 @@ class MyTools:
 
             return ( int(row_col / MyTools.N_Rows), row_col % MyTools.N_Rows, _dir >= 1 )
         else:
-            if action.shape.__len__() == 0 or len(action) != 3:
-                print("need 3 dim actions")
-                return ()
             _dir = False
             if action[2] > 0:
                 _dir = True
@@ -323,6 +315,21 @@ class MyTools:
         print("removed actions:", remove_ids)
         return np.delete(All_Actions, remove_ids, axis=0), remove_ids
 
+    @staticmethod
+    def get_reward(list_valid_moves, move, score_delta):
+        closest_index = -1
+        action = MyTools.get_action_from(move)
+        min_dis = 1000
+        for i in range(0, len(list_valid_moves)):
+            diff = action - MyTools.get_action_from(list_valid_moves[i])
+            c_dis = np.sqrt(np.sum(diff * diff))
+            if c_dis < min_dis:
+                min_dis = c_dis
+                closest_index = i
+        if closest_index >= 0:
+            return np.exp(-4 * min_dis) + score_delta / 100.0
+        return score_delta / 100.0
+
     def _calculate_state_actions_stats(self):
         # All_Actions, remove_ids = MyTools.get_valid_actions()
         # print(All_Actions)
@@ -338,7 +345,7 @@ class MyTools:
             "c#cbdacd\n" \
             "dca#d#b#\n" \
             "dd#dccdb"
-        state, _, _ = MyTools.get_game_state(board_sample_str, 0)
+        state, _ = MyTools.get_game_state(board_sample_str, 0)
 
         self.N_All_Actions = 3  # len(All_Actions)
         self.N_State = len(state)
@@ -361,8 +368,12 @@ class MyTools:
 class Trainer:
     def __init__(
             self,
-            buff_size=2048,
+            buff_size=20480,
             max_steps=1000000):
+
+        global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.experiment_dir = os.path.abspath("./experiments/{}".format("ubisoft-game"))
+
         self.m_tools = MyTools()
 
         # Simulation budget (steps) per iteration. This is the main parameter to tune.
@@ -370,7 +381,7 @@ class Trainer:
         # For more complex problems such as 3D humanoid locomotion, try 32k or even 64k.
         # Larger values are slower but more robust.
         self.buff_size = buff_size
-        self.batch_size = 256
+        self.batch_size = 2048
 
         # Stop training after this many steps
         self.max_steps = max_steps
@@ -393,21 +404,37 @@ class Trainer:
         tf.global_variables_initializer().run(session=self.sess)
         self.agent.init(self.sess)  # must be called after TensorFlow global variables init
 
+        # save and load
+        # Create directories for checkpoints and summaries
+        self.checkpoint_dir = os.path.join(self.experiment_dir, "checkpoints")
+        self.checkpoint_path = os.path.join(self.checkpoint_dir, "model")
+
+        if not os.path.exists(self.checkpoint_dir):
+            os.makedirs(self.checkpoint_dir)
+
+        self.saver = tf.train.Saver()
+        # Load a previous checkpoint if we find one
+        latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
+        if latest_checkpoint:
+            print("Loading model checkpoint {}...\n".format(latest_checkpoint))
+            self.saver.restore(self.sess, latest_checkpoint)
+
         # Main training loop
-        self.totalSimSteps = 0
+        # Get the current time step
+        self.totalSimSteps = self.sess.run(tf.contrib.framework.get_global_step())
         self.iterSimSteps = 0
+        self.save_counter = 0
 
     def collect_observations(self, board, move, score_delta, next_board, moves_left):
-        state, list_valid_moves, num_valid_moves = MyTools.get_game_state(board, moves_left + 1)
-        reward = score_delta / 100.0
+        state, list_valid_moves = MyTools.get_game_state(board, moves_left + 1)
+        reward = MyTools.get_reward(list_valid_moves, move, score_delta)
         action = MyTools.get_action_from(
             move=move,
-            valid_moves=list_valid_moves,
-            num_valid_moves=num_valid_moves
+            valid_moves=list_valid_moves
         )
-        n_state, _, _ = MyTools.get_game_state(next_board, moves_left)
-        done = (moves_left == 0)
-        
+        n_state, _ = MyTools.get_game_state(next_board, moves_left)
+        done = (moves_left == 0) or (reward > 0)
+
         # Save the experience point
         self.agent.memorize(state, action, reward, n_state, done)
 
@@ -423,15 +450,18 @@ class Trainer:
 
             self.iterSimSteps = 0
 
+            if self.totalSimSteps > self.save_counter * 50000:
+                self.saver.save(self.sess, self.checkpoint_path)
+                self.save_counter = self.totalSimSteps % 50000
+
     def predict_action(self, board, score, moves_left):
-        state, list_valid_moves, num_valid_moves = MyTools.get_game_state(board, moves_left)
+        state, list_valid_moves = MyTools.get_game_state(board, moves_left)
 
         predicted_move = self.agent.act(self.sess, state)
 
         return MyTools.get_move_from(
             action=predicted_move[0],
-            valid_moves=list_valid_moves,
-            num_valid_moves=num_valid_moves
+            valid_moves=list_valid_moves
         )
 
     def init_episode(self, boards, scores, moves, final_score):
